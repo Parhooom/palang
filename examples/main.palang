@@ -1,0 +1,7 @@
+func main() int {
+    return 69;
+}
+
+func retTwo() int {
+    return 2;
+}
