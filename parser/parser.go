@@ -38,30 +38,83 @@ func (p *Parser) expect(tk token.TokenKind, msg string) token.Token {
 	return currToken
 }
 
-func (p *Parser) ParseProgram() {
-	fmt.Printf("format ELF64\n")
-	fmt.Printf("section \".text\" executable\n")
+func (p *Parser) Program() {
+	p.genProgramStart()
 
 	for p.currToken.Kind != token.TK_EOF {
-		p.expect(token.TK_FUNC, "func")
-		ident := p.expect(token.TK_IDENT, "identifier")
-		fmt.Printf("%s:\n", ident.Text)
-		if ident.Text == "main" {
-			fmt.Printf("    public main\n")
-		}
-
-		p.expect(token.TK_LPAREN, "(")
-		p.expect(token.TK_RPAREN, ")")
-		p.expect(token.TK_BASIC, "basic type")
-		p.expect(token.TK_LCURLY, "{")
-		p.expect(token.TK_RETURN, "return")
-		num := p.expect(token.TK_INT, "integer")
-		fmt.Printf("    mov rax, %s\n", num.Text)
-		fmt.Printf("    ret\n")
-
-		p.expect(token.TK_SEMICOLON, ";")
-		p.expect(token.TK_RCURLY, "}")
+		p.Func()
 	}
 
-	fmt.Printf("section \".note.GNU-stack\"\n")
+	p.genProgramEnd()
+}
+
+func (p *Parser) FuncParam() {
+	p.expect(token.TK_IDENT, "identifier")
+	p.expect(token.TK_BASIC, "int type")
+}
+
+func (p *Parser) FuncParams() {
+	p.expect(token.TK_LPAREN, "(")
+	if p.currToken.Kind != token.TK_RPAREN {
+		p.FuncParam()
+		for p.currToken.Kind == token.TK_COMMA {
+			p.nextToken()
+			p.FuncParam()
+		}
+	}
+	p.expect(token.TK_RPAREN, ")")
+}
+
+func (p *Parser) Type() uint8 {
+	retType := p.expect(token.TK_BASIC, "type")
+
+	if retType.Text == "int" {
+		return TYPE_INT
+	}
+
+	return TYPE_VOID
+}
+
+func (p *Parser) ReturnStatement() {
+	p.expect(token.TK_RETURN, "return")
+	if p.currToken.Kind != token.TK_SEMICOLON {
+		statusCode := p.expect(token.TK_INT, "integer")
+		p.genFuncEnd(statusCode.Text)
+	}
+	p.expect(token.TK_SEMICOLON, ";")
+}
+
+func (p *Parser) Statement() {
+	if p.currToken.Kind == token.TK_RETURN {
+		p.ReturnStatement()
+	} else {
+		fmt.Fprintln(os.Stderr, "ERROR: not implemented")
+		os.Exit(1)
+	}
+}
+
+func (p *Parser) Statements() {
+	for p.currToken.Kind != token.TK_RCURLY && p.currToken.Kind != token.TK_EOF {
+		p.Statement()
+	}
+}
+
+func (p *Parser) Block() {
+	p.expect(token.TK_LCURLY, "{")
+	p.Statements()
+	p.expect(token.TK_RCURLY, "}")
+}
+
+func (p *Parser) Func() {
+	p.expect(token.TK_FUNC, "func")
+
+	funcName := p.expect(token.TK_IDENT, "function name")
+	p.genFuncLabel(funcName.Text)
+
+	p.FuncParams()
+	if p.currToken.Kind != token.TK_LCURLY {
+		p.Type()
+	}
+
+	p.Block()
 }

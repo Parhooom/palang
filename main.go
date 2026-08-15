@@ -21,7 +21,7 @@ func main() {
 
 	f, err := os.Open(args[1])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err.Error())
 		usage(os.Stderr, args[0])
 		os.Exit(1)
 	}
@@ -34,7 +34,7 @@ func main() {
 	// }
 
 	p := parser.New(l)
-	p.ParseProgram()
+	p.Program()
 }
 
 func usage(w io.Writer, program string) {

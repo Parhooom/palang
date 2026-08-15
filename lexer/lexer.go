@@ -53,6 +53,8 @@ func (l *Lexer) NextToken() token.Token {
 		tok = token.Token{Kind: token.TK_LCURLY, Text: "{"}
 	case '}':
 		tok = token.Token{Kind: token.TK_RCURLY, Text: "}"}
+	case ',':
+		tok = token.Token{Kind: token.TK_COMMA, Text: ","}
 	case ';':
 		tok = token.Token{Kind: token.TK_SEMICOLON, Text: ";"}
 	case 0:
