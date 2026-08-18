@@ -48,6 +48,42 @@ func (p *Parser) Program() {
 	p.genProgramEnd()
 }
 
+func (p *Parser) Primary() Type {
+	intLiteral := p.expect(token.TK_INT, "integer literal")
+	p.genIntLiteral(intLiteral.Text)
+	return TYPE_INT
+}
+
+func (p *Parser) Factor() Type {
+	leftType := p.Primary()
+
+	for p.currToken.Kind == token.TK_MULT || p.currToken.Kind == token.TK_DIV {
+		operator := p.currToken
+		p.nextToken()
+		rightType := p.Primary()
+		p.genBinaryExpression(leftType, rightType, operator)
+	}
+
+	return leftType
+}
+
+func (p *Parser) Term() Type {
+	leftType := p.Factor()
+
+	for p.currToken.Kind == token.TK_PLUS || p.currToken.Kind == token.TK_MINUS {
+		operator := p.currToken
+		p.nextToken()
+		rightType := p.Factor()
+		p.genBinaryExpression(leftType, rightType, operator)
+	}
+
+	return leftType
+}
+
+func (p *Parser) Expression() Type {
+	return p.Term()
+}
+
 func (p *Parser) FuncParam() {
 	p.expect(token.TK_IDENT, "identifier")
 	p.expect(token.TK_BASIC, "int type")
@@ -55,6 +91,7 @@ func (p *Parser) FuncParam() {
 
 func (p *Parser) FuncParams() {
 	p.expect(token.TK_LPAREN, "(")
+
 	if p.currToken.Kind != token.TK_RPAREN {
 		p.FuncParam()
 		for p.currToken.Kind == token.TK_COMMA {
@@ -62,10 +99,11 @@ func (p *Parser) FuncParams() {
 			p.FuncParam()
 		}
 	}
+
 	p.expect(token.TK_RPAREN, ")")
 }
 
-func (p *Parser) Type() uint8 {
+func (p *Parser) Type() Type {
 	retType := p.expect(token.TK_BASIC, "type")
 
 	if retType.Text == "int" {
@@ -77,10 +115,14 @@ func (p *Parser) Type() uint8 {
 
 func (p *Parser) ReturnStatement() {
 	p.expect(token.TK_RETURN, "return")
+
 	if p.currToken.Kind != token.TK_SEMICOLON {
-		statusCode := p.expect(token.TK_INT, "integer")
-		p.genFuncEnd(statusCode.Text)
+		returnType := p.Expression()
+		p.genReturnStatement(returnType)
+	} else {
+		p.genReturnStatement(TYPE_VOID)
 	}
+
 	p.expect(token.TK_SEMICOLON, ";")
 }
 

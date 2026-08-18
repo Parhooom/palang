@@ -1,6 +1,9 @@
 package parser
 
+type Type uint8
+
 const (
-	TYPE_VOID uint8 = iota
+	_ Type = iota
+	TYPE_VOID
 	TYPE_INT
 )
