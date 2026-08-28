@@ -11,6 +11,10 @@ import (
 type Parser struct {
 	l         *lexer.Lexer
 	currToken token.Token
+
+	symbolTable    SymbolTable
+	isFuncReturned bool
+	varsOffsets    uint
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -49,9 +53,37 @@ func (p *Parser) Program() {
 }
 
 func (p *Parser) Primary() Type {
-	intLiteral := p.expect(token.TK_INT, "integer literal")
-	p.genIntLiteral(intLiteral.Text)
-	return TYPE_INT
+	switch p.currToken.Kind {
+	case token.TK_INT:
+		intLiteral := p.expect(token.TK_INT, "integer literal")
+		p.genIntLiteral(intLiteral.Text)
+
+		return TYPE_INT
+
+	case token.TK_IDENT:
+		name := p.expect(token.TK_IDENT, "identifier")
+
+		symbol, exists := p.symbolTable.get(name.Text)
+		if !exists {
+			fmt.Fprintf(os.Stderr, "ERROR: variable %s not defined\n", name.Text)
+			os.Exit(1)
+		}
+
+		switch symbol.Kind {
+		case TYPE_INT:
+			p.genIntSymbol(symbol)
+		default:
+			fmt.Fprintf(os.Stderr, "ERROR: unreachable\n")
+			os.Exit(1)
+		}
+
+		return symbol.Kind
+
+	default:
+		fmt.Fprintf(os.Stderr, "ERROR: primary expression not implemented\n")
+		os.Exit(1)
+		return TYPE_VOID
+	}
 }
 
 func (p *Parser) Factor() Type {
@@ -84,9 +116,19 @@ func (p *Parser) Expression() Type {
 	return p.Term()
 }
 
+func (p *Parser) Type() Type {
+	typeToken := p.expect(token.TK_BASIC, "type")
+
+	if typeToken.Text == "int" {
+		return TYPE_INT
+	}
+
+	return TYPE_VOID
+}
+
 func (p *Parser) FuncParam() {
 	p.expect(token.TK_IDENT, "identifier")
-	p.expect(token.TK_BASIC, "int type")
+	p.Type()
 }
 
 func (p *Parser) FuncParams() {
@@ -103,34 +145,60 @@ func (p *Parser) FuncParams() {
 	p.expect(token.TK_RPAREN, ")")
 }
 
-func (p *Parser) Type() Type {
-	retType := p.expect(token.TK_BASIC, "type")
-
-	if retType.Text == "int" {
-		return TYPE_INT
-	}
-
-	return TYPE_VOID
-}
-
 func (p *Parser) ReturnStatement() {
 	p.expect(token.TK_RETURN, "return")
 
 	if p.currToken.Kind != token.TK_SEMICOLON {
 		returnType := p.Expression()
-		p.genReturnStatement(returnType)
+		p.genFuncEnd(returnType)
 	} else {
-		p.genReturnStatement(TYPE_VOID)
+		p.genFuncEnd(TYPE_VOID)
 	}
 
 	p.expect(token.TK_SEMICOLON, ";")
+	p.isFuncReturned = true
+}
+
+func (p *Parser) VarDecl() {
+	varType := p.Type()
+	varToken := p.expect(token.TK_IDENT, "identifier")
+	p.expect(token.TK_SEMICOLON, ";")
+
+	varTypeOffset := offsetOf[varType]
+	p.varsOffsets += varTypeOffset
+	p.symbolTable.put(varToken.Text, newSymbol(varType, p.varsOffsets))
+	p.genVarDecl(varTypeOffset)
+}
+
+func (p *Parser) VarAssign() {
+	varToken := p.expect(token.TK_IDENT, "identifier")
+	p.expect(token.TK_ASSIGN, "=")
+	exprType := p.Expression()
+	p.expect(token.TK_SEMICOLON, ";")
+
+	symbol, exists := p.symbolTable.get(varToken.Text)
+	if !exists {
+		fmt.Fprintln(os.Stderr, "ERROR: variable not defined")
+		os.Exit(1)
+	}
+	if symbol.Kind != exprType {
+		fmt.Fprintln(os.Stderr, "ERROR: type mismatch")
+		os.Exit(1)
+	}
+
+	p.genVarAssign(symbol)
 }
 
 func (p *Parser) Statement() {
-	if p.currToken.Kind == token.TK_RETURN {
+	switch p.currToken.Kind {
+	case token.TK_RETURN:
 		p.ReturnStatement()
-	} else {
-		fmt.Fprintln(os.Stderr, "ERROR: not implemented")
+	case token.TK_BASIC:
+		p.VarDecl()
+	case token.TK_IDENT:
+		p.VarAssign()
+	default:
+		fmt.Fprintln(os.Stderr, "ERROR: statement not implemented")
 		os.Exit(1)
 	}
 }
@@ -148,10 +216,15 @@ func (p *Parser) Block() {
 }
 
 func (p *Parser) Func() {
+	p.symbolTable = SymbolTable{Table: make(map[string]Symbol)}
+	p.isFuncReturned = false
+	p.varsOffsets = 0
+
 	p.expect(token.TK_FUNC, "func")
 
 	funcName := p.expect(token.TK_IDENT, "function name")
 	p.genFuncLabel(funcName.Text)
+	p.genFuncStart()
 
 	p.FuncParams()
 	if p.currToken.Kind != token.TK_LCURLY {
@@ -159,4 +232,10 @@ func (p *Parser) Func() {
 	}
 
 	p.Block()
+
+	if !p.isFuncReturned {
+		p.genFuncEnd(TYPE_VOID)
+	}
+
+	// fmt.Printf("%+v\n", p.symbolTable)
 }

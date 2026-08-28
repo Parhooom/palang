@@ -25,13 +25,31 @@ func (p *Parser) genFuncLabel(name string) {
 	}
 }
 
-func (p *Parser) genFuncEnd(statusCode string) {
-	fmt.Printf("    mov rax, %s\n", statusCode)
-	fmt.Printf("    ret\n")
+func (p *Parser) genFuncStart() {
+	fmt.Println("    push rbp")
+	fmt.Println("    mov rbp, rsp")
+	fmt.Println()
+}
+
+func (p *Parser) genFuncEnd(returnType Type) {
+	fmt.Println()
+	switch returnType {
+	case TYPE_VOID:
+	case TYPE_INT:
+		fmt.Println("    pop rax")
+	}
+	// fmt.Println("    mov rsp, rbp")
+	fmt.Printf("    add rsp, %d\n", p.varsOffsets)
+	fmt.Println("    pop rbp")
+	fmt.Println("    ret")
 }
 
 func (p *Parser) genIntLiteral(num string) {
 	fmt.Printf("    push %s\n", num)
+}
+
+func (p *Parser) genIntSymbol(symbol Symbol) {
+	fmt.Printf("    push qword [rbp-%d]\n", symbol.Offset)
 }
 
 func (p *Parser) genBinaryExpression(leftType Type, rightType Type, operator token.Token) {
@@ -60,12 +78,13 @@ func (p *Parser) genBinaryExpression(leftType Type, rightType Type, operator tok
 	}
 }
 
-func (p *Parser) genReturnStatement(returnType Type) {
-	switch returnType {
-	case TYPE_VOID:
-		fmt.Println("    ret")
-	case TYPE_INT:
-		fmt.Println("    pop rax")
-		fmt.Println("    ret")
+func (p *Parser) genVarDecl(offset uint) {
+	fmt.Printf("    sub rsp, %d\n", offset)
+}
+
+func (p *Parser) genVarAssign(symbol Symbol) {
+	if symbol.Kind == TYPE_INT {
+		fmt.Printf("    pop rax\n")
+		fmt.Printf("    mov [rbp-%d], rax\n", symbol.Offset)
 	}
 }

@@ -1,0 +1,10 @@
+func main() int {
+    int a;
+    a = 34;
+
+    int b;
+    b = 35;
+
+    return a + b;
+}
+

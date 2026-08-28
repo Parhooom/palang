@@ -65,6 +65,8 @@ func (l *Lexer) NextToken() token.Token {
 		tok = token.Token{Kind: token.TK_MULT, Text: "*"}
 	case '/':
 		tok = token.Token{Kind: token.TK_DIV, Text: "/"}
+	case '=':
+		tok = token.Token{Kind: token.TK_ASSIGN, Text: "="}
 	case 0:
 		tok = token.Token{Kind: token.TK_EOF, Text: ""}
 
