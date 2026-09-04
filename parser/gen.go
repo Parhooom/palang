@@ -38,8 +38,8 @@ func (p *Parser) genFuncEnd(returnType Type) {
 	case TYPE_INT:
 		fmt.Println("    pop rax")
 	}
-	// fmt.Println("    mov rsp, rbp")
-	fmt.Printf("    add rsp, %d\n", p.varsOffsets)
+	// fmt.Printf("    add rsp, %d\n", p.varsOffsets)
+	fmt.Println("    mov rsp, rbp")
 	fmt.Println("    pop rbp")
 	fmt.Println("    ret")
 }
@@ -72,6 +72,30 @@ func (p *Parser) genBinaryExpression(leftType Type, rightType Type, operator tok
 		case token.TK_DIV:
 			fmt.Println("    cqo")
 			fmt.Println("    idiv rbx")
+		case token.TK_EQ:
+			fmt.Println("    cmp rax, rbx")
+			fmt.Println("    sete al")
+			fmt.Println("    movzx rax, al")
+		case token.TK_NEQ:
+			fmt.Println("    cmp rax, rbx")
+			fmt.Println("    setne al")
+			fmt.Println("    movzx rax, al")
+		case token.TK_LT:
+			fmt.Println("    cmp rax, rbx")
+			fmt.Println("    setl al")
+			fmt.Println("    movzx rax, al")
+		case token.TK_LTE:
+			fmt.Println("    cmp rax, rbx")
+			fmt.Println("    setle al")
+			fmt.Println("    movzx rax, al")
+		case token.TK_GT:
+			fmt.Println("    cmp rax, rbx")
+			fmt.Println("    setg al")
+			fmt.Println("    movzx rax, al")
+		case token.TK_GTE:
+			fmt.Println("    cmp rax, rbx")
+			fmt.Println("    setge al")
+			fmt.Println("    movzx rax, al")
 		}
 
 		fmt.Println("    push rax")

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"os"
 )
 
 type Symbol struct {
@@ -14,14 +15,14 @@ type SymbolTable struct {
 	Table map[string]Symbol
 }
 
-func (st *SymbolTable) put(name string, symbol Symbol) error {
-	s, exists := st.Table[name]
-	if exists && s.Kind != symbol.Kind {
-		return fmt.Errorf("ERROR: %s symbol was defined with different signiture", name)
+func (st *SymbolTable) put(name string, symbol Symbol) {
+	_, exists := st.Table[name]
+	if exists {
+		fmt.Fprintf(os.Stderr, "ERROR: '%s' exists in this scope\n", name)
+		os.Exit(1)
 	}
 
 	st.Table[name] = symbol
-	return nil
 }
 
 func (st *SymbolTable) get(name string) (Symbol, bool) {

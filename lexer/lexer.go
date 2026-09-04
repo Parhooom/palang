@@ -66,7 +66,34 @@ func (l *Lexer) NextToken() token.Token {
 	case '/':
 		tok = token.Token{Kind: token.TK_DIV, Text: "/"}
 	case '=':
-		tok = token.Token{Kind: token.TK_ASSIGN, Text: "="}
+		if l.peekChar() == '=' {
+			tok = token.Token{Kind: token.TK_EQ, Text: "=="}
+			l.nextChar()
+		} else {
+			tok = token.Token{Kind: token.TK_ASSIGN, Text: "="}
+		}
+	case '!':
+		if l.peekChar() == '=' {
+			tok = token.Token{Kind: token.TK_NEQ, Text: "!="}
+			l.nextChar()
+		} else {
+			tok = token.Token{Kind: token.TK_BANG, Text: "!"}
+		}
+	case '<':
+		if l.peekChar() == '=' {
+			tok = token.Token{Kind: token.TK_LTE, Text: "<="}
+			l.nextChar()
+		} else {
+			tok = token.Token{Kind: token.TK_LT, Text: "<"}
+		}
+	case '>':
+		if l.peekChar() == '=' {
+			tok = token.Token{Kind: token.TK_GTE, Text: ">="}
+			l.nextChar()
+		} else {
+			tok = token.Token{Kind: token.TK_GT, Text: ">"}
+		}
+
 	case 0:
 		tok = token.Token{Kind: token.TK_EOF, Text: ""}
 

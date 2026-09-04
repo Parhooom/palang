@@ -22,6 +22,13 @@ const (
 	TK_COMMA
 	TK_SEMICOLON
 	TK_ASSIGN
+	TK_BANG
+	TK_EQ
+	TK_NEQ
+	TK_LT
+	TK_LTE
+	TK_GT
+	TK_GTE
 
 	TK_PLUS
 	TK_MINUS
@@ -30,12 +37,14 @@ const (
 
 	TK_FUNC
 	TK_RETURN
+	TK_IF
 )
 
 var keywords = map[string]TokenKind{
 	"func":   TK_FUNC,
 	"return": TK_RETURN,
 	"int":    TK_BASIC,
+	"if":     TK_IF,
 }
 
 func LookupIdent(literal string) TokenKind {

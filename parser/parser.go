@@ -55,17 +55,16 @@ func (p *Parser) Program() {
 func (p *Parser) Primary() Type {
 	switch p.currToken.Kind {
 	case token.TK_INT:
-		intLiteral := p.expect(token.TK_INT, "integer literal")
-		p.genIntLiteral(intLiteral.Text)
-
+		p.genIntLiteral(p.currToken.Text)
+		p.nextToken()
 		return TYPE_INT
 
 	case token.TK_IDENT:
-		name := p.expect(token.TK_IDENT, "identifier")
+		name := p.currToken.Text
 
-		symbol, exists := p.symbolTable.get(name.Text)
+		symbol, exists := p.symbolTable.get(name)
 		if !exists {
-			fmt.Fprintf(os.Stderr, "ERROR: variable %s not defined\n", name.Text)
+			fmt.Fprintf(os.Stderr, "ERROR: variable %s not defined\n", name)
 			os.Exit(1)
 		}
 
@@ -73,14 +72,21 @@ func (p *Parser) Primary() Type {
 		case TYPE_INT:
 			p.genIntSymbol(symbol)
 		default:
-			fmt.Fprintf(os.Stderr, "ERROR: unreachable\n")
+			fmt.Fprintf(os.Stderr, "ERROR: symbol type is not supported\n")
 			os.Exit(1)
 		}
 
+		p.nextToken()
 		return symbol.Kind
 
+	case token.TK_LPAREN:
+		p.nextToken()
+		exprType := p.Expression()
+		p.expect(token.TK_RPAREN, ")")
+		return exprType
+
 	default:
-		fmt.Fprintf(os.Stderr, "ERROR: primary expression not implemented\n")
+		fmt.Fprintf(os.Stderr, "ERROR: expected primary expression, got %s\n", p.currToken.Text)
 		os.Exit(1)
 		return TYPE_VOID
 	}
@@ -112,8 +118,34 @@ func (p *Parser) Term() Type {
 	return leftType
 }
 
+func (p *Parser) Comparison() Type {
+	leftType := p.Term()
+
+	for p.currToken.Kind == token.TK_LT || p.currToken.Kind == token.TK_LTE || p.currToken.Kind == token.TK_GT || p.currToken.Kind == token.TK_GTE {
+		operator := p.currToken
+		p.nextToken()
+		rightType := p.Term()
+		p.genBinaryExpression(leftType, rightType, operator)
+	}
+
+	return leftType
+}
+
+func (p *Parser) Equality() Type {
+	leftType := p.Comparison()
+
+	for p.currToken.Kind == token.TK_EQ || p.currToken.Kind == token.TK_NEQ {
+		operator := p.currToken
+		p.nextToken()
+		rightType := p.Comparison()
+		p.genBinaryExpression(leftType, rightType, operator)
+	}
+
+	return leftType
+}
+
 func (p *Parser) Expression() Type {
-	return p.Term()
+	return p.Equality()
 }
 
 func (p *Parser) Type() Type {
@@ -126,9 +158,10 @@ func (p *Parser) Type() Type {
 	return TYPE_VOID
 }
 
+// TODO: function params generation
 func (p *Parser) FuncParam() {
-	p.expect(token.TK_IDENT, "identifier")
 	p.Type()
+	p.expect(token.TK_IDENT, "identifier")
 }
 
 func (p *Parser) FuncParams() {
