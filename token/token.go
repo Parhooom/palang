@@ -38,13 +38,20 @@ const (
 	TK_FUNC
 	TK_RETURN
 	TK_IF
+	TK_ELSE
+	TK_TRUE
+	TK_FALSE
 )
 
 var keywords = map[string]TokenKind{
 	"func":   TK_FUNC,
 	"return": TK_RETURN,
 	"int":    TK_BASIC,
+	"bool":   TK_BASIC,
 	"if":     TK_IF,
+	"else":   TK_ELSE,
+	"true":   TK_TRUE,
+	"false":  TK_FALSE,
 }
 
 func LookupIdent(literal string) TokenKind {

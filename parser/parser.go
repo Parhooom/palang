@@ -12,9 +12,9 @@ type Parser struct {
 	l         *lexer.Lexer
 	currToken token.Token
 
-	symbolTable    SymbolTable
-	isFuncReturned bool
-	varsOffsets    uint
+	symbolTable   SymbolTable
+	varsOffsets   uint
+	localLabelNum uint
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -59,6 +59,16 @@ func (p *Parser) Primary() Type {
 		p.nextToken()
 		return TYPE_INT
 
+	case token.TK_TRUE:
+		p.genBoolLiteral(true)
+		p.nextToken()
+		return TYPE_BOOL
+
+	case token.TK_FALSE:
+		p.genBoolLiteral(false)
+		p.nextToken()
+		return TYPE_BOOL
+
 	case token.TK_IDENT:
 		name := p.currToken.Text
 
@@ -67,14 +77,7 @@ func (p *Parser) Primary() Type {
 			fmt.Fprintf(os.Stderr, "ERROR: variable %s not defined\n", name)
 			os.Exit(1)
 		}
-
-		switch symbol.Kind {
-		case TYPE_INT:
-			p.genIntSymbol(symbol)
-		default:
-			fmt.Fprintf(os.Stderr, "ERROR: symbol type is not supported\n")
-			os.Exit(1)
-		}
+		p.genSymbol(symbol)
 
 		p.nextToken()
 		return symbol.Kind
@@ -99,7 +102,7 @@ func (p *Parser) Factor() Type {
 		operator := p.currToken
 		p.nextToken()
 		rightType := p.Primary()
-		p.genBinaryExpression(leftType, rightType, operator)
+		leftType = p.genBinaryExpression(leftType, rightType, operator)
 	}
 
 	return leftType
@@ -112,7 +115,7 @@ func (p *Parser) Term() Type {
 		operator := p.currToken
 		p.nextToken()
 		rightType := p.Factor()
-		p.genBinaryExpression(leftType, rightType, operator)
+		leftType = p.genBinaryExpression(leftType, rightType, operator)
 	}
 
 	return leftType
@@ -125,7 +128,7 @@ func (p *Parser) Comparison() Type {
 		operator := p.currToken
 		p.nextToken()
 		rightType := p.Term()
-		p.genBinaryExpression(leftType, rightType, operator)
+		leftType = p.genBinaryExpression(leftType, rightType, operator)
 	}
 
 	return leftType
@@ -138,7 +141,7 @@ func (p *Parser) Equality() Type {
 		operator := p.currToken
 		p.nextToken()
 		rightType := p.Comparison()
-		p.genBinaryExpression(leftType, rightType, operator)
+		leftType = p.genBinaryExpression(leftType, rightType, operator)
 	}
 
 	return leftType
@@ -151,11 +154,17 @@ func (p *Parser) Expression() Type {
 func (p *Parser) Type() Type {
 	typeToken := p.expect(token.TK_BASIC, "type")
 
-	if typeToken.Text == "int" {
+	switch typeToken.Text {
+	case "int":
 		return TYPE_INT
-	}
+	case "bool":
+		return TYPE_BOOL
 
-	return TYPE_VOID
+	default:
+		fmt.Fprintf(os.Stderr, "ERROR: unknown type %s\n", typeToken.Text)
+		os.Exit(1)
+		return TYPE_VOID
+	}
 }
 
 // TODO: function params generation
@@ -183,13 +192,12 @@ func (p *Parser) ReturnStatement() {
 
 	if p.currToken.Kind != token.TK_SEMICOLON {
 		returnType := p.Expression()
-		p.genFuncEnd(returnType)
+		p.genReturnStatement(returnType)
 	} else {
-		p.genFuncEnd(TYPE_VOID)
+		p.genReturnStatement(TYPE_VOID)
 	}
 
 	p.expect(token.TK_SEMICOLON, ";")
-	p.isFuncReturned = true
 }
 
 func (p *Parser) VarDecl() {
@@ -250,8 +258,8 @@ func (p *Parser) Block() {
 
 func (p *Parser) Func() {
 	p.symbolTable = SymbolTable{Table: make(map[string]Symbol)}
-	p.isFuncReturned = false
 	p.varsOffsets = 0
+	p.localLabelNum = 0
 
 	p.expect(token.TK_FUNC, "func")
 
@@ -265,10 +273,5 @@ func (p *Parser) Func() {
 	}
 
 	p.Block()
-
-	if !p.isFuncReturned {
-		p.genFuncEnd(TYPE_VOID)
-	}
-
-	// fmt.Printf("%+v\n", p.symbolTable)
+	p.genFuncEnd()
 }
