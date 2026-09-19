@@ -25,6 +25,10 @@ func (p *Parser) genFuncLabel(name string) {
 	}
 }
 
+func (p *Parser) genLocalLabel(label string) {
+	fmt.Printf("%s:\n", label)
+}
+
 func (p *Parser) genFuncStart() {
 	fmt.Println("    push rbp")
 	fmt.Println("    mov rbp, rsp")
@@ -162,4 +166,8 @@ func (p *Parser) genJz(label string) {
 	fmt.Printf("    pop rax\n")
 	fmt.Printf("    cmp rax, 0\n")
 	fmt.Printf("    jz %s\n", label)
+}
+
+func (p *Parser) genJmp(label string) {
+	fmt.Printf("    jmp %s\n", label)
 }

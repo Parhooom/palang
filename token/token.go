@@ -38,6 +38,7 @@ const (
 	TK_FUNC
 	TK_RETURN
 	TK_IF
+	TK_WHILE
 	TK_ELSE
 	TK_TRUE
 	TK_FALSE
@@ -49,6 +50,7 @@ var keywords = map[string]TokenKind{
 	"int":    TK_BASIC,
 	"bool":   TK_BASIC,
 	"if":     TK_IF,
+	"while":  TK_WHILE,
 	"else":   TK_ELSE,
 	"true":   TK_TRUE,
 	"false":  TK_FALSE,

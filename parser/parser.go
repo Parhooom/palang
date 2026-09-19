@@ -42,6 +42,11 @@ func (p *Parser) expect(tk token.TokenKind, msg string) token.Token {
 	return currToken
 }
 
+func (p *Parser) newLocalLabel() string {
+	p.localLabelNum += 1
+	return fmt.Sprintf(".label%d", p.localLabelNum)
+}
+
 func (p *Parser) Program() {
 	p.genProgramStart()
 
@@ -230,6 +235,57 @@ func (p *Parser) VarAssign() {
 	p.genVarAssign(symbol)
 }
 
+func (p *Parser) IfStatement() {
+	p.expect(token.TK_IF, "if")
+
+	p.expect(token.TK_LPAREN, "(")
+	p.Expression()
+	p.expect(token.TK_RPAREN, ")")
+
+	elseLabel := p.newLocalLabel()
+	p.genJz(elseLabel)
+
+	p.Block()
+
+	if p.currToken.Kind == token.TK_ELSE {
+		p.nextToken()
+
+		endLabel := p.newLocalLabel()
+		p.genJmp(endLabel)
+		p.genLocalLabel(elseLabel)
+
+		if p.currToken.Kind == token.TK_IF {
+			p.IfStatement()
+		} else {
+			p.Block()
+		}
+
+		p.genLocalLabel(endLabel)
+	} else {
+		p.genLocalLabel(elseLabel)
+	}
+}
+
+func (p *Parser) WhileStatement() {
+	p.expect(token.TK_WHILE, "while")
+
+	startLable := p.newLocalLabel()
+	endLabel := p.newLocalLabel()
+
+	p.genLocalLabel(startLable)
+
+	p.expect(token.TK_LPAREN, "(")
+	p.Expression()
+	p.expect(token.TK_RPAREN, ")")
+
+	p.genJz(endLabel)
+
+	p.Block()
+
+	p.genJmp(startLable)
+	p.genLocalLabel(endLabel)
+}
+
 func (p *Parser) Statement() {
 	switch p.currToken.Kind {
 	case token.TK_RETURN:
@@ -238,6 +294,11 @@ func (p *Parser) Statement() {
 		p.VarDecl()
 	case token.TK_IDENT:
 		p.VarAssign()
+	case token.TK_IF:
+		p.IfStatement()
+	case token.TK_WHILE:
+		p.WhileStatement()
+
 	default:
 		fmt.Fprintln(os.Stderr, "ERROR: statement not implemented")
 		os.Exit(1)
