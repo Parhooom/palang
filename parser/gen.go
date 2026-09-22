@@ -7,9 +7,25 @@ import (
 	"palang/token"
 )
 
+var argRegs = []string{
+	"rdi",
+	"rsi",
+	"rdx",
+	"rcx",
+	"r8",
+	"r9",
+}
+
 func (p *Parser) genProgramStart() {
-	fmt.Printf("format ELF64\n")
-	fmt.Printf("section \".text\" executable\n")
+	fmt.Println("format ELF64")
+	fmt.Println()
+	fmt.Println("section \".rodata\"")
+	fmt.Println("    fmt_int db \"%d\", 10, 0")
+	fmt.Println()
+	fmt.Println("section \".text\" executable")
+	fmt.Println()
+	fmt.Println("extrn \"printf\" as _printf")
+	fmt.Println("printf = PLT _printf")
 }
 
 func (p *Parser) genProgramEnd() {
@@ -41,6 +57,42 @@ func (p *Parser) genFuncEnd() {
 	fmt.Println("    mov rsp, rbp")
 	fmt.Println("    pop rbp")
 	fmt.Println("    ret")
+}
+
+func (p *Parser) genFuncParam(offsetSize uint, offset uint, reg string) {
+	fmt.Printf("    sub rsp, %d\n", offsetSize)
+	fmt.Printf("    mov [rbp-%d], %s\n", offset, reg)
+}
+
+func (p *Parser) genPrintCall() {
+	aligned := (p.varsOffsets % 16) == 0
+
+	fmt.Println("    pop rsi")
+	if !aligned {
+		fmt.Println("    sub rsp, 8")
+	}
+	fmt.Println("    lea rdi, [fmt_int]")
+	fmt.Println("    mov rax, 0")
+	fmt.Println("    call printf")
+	if !aligned {
+		fmt.Println("    add rsp, 8")
+	}
+}
+
+func (p *Parser) genFuncCall(name string, argsCount int) {
+	if name == "print" {
+		p.genPrintCall()
+		return
+	}
+
+	for i := argsCount - 1; i >= 0; i-- {
+		fmt.Printf("    pop %s\n", argRegs[i])
+	}
+	fmt.Printf("    call %s\n", name)
+}
+
+func (p *Parser) genFuncCallReturn() {
+	fmt.Println("    push rax")
 }
 
 func (p *Parser) genReturnStatement(retType Type) {
@@ -153,8 +205,8 @@ func (p *Parser) genBinaryExpression(leftType, rightType Type, operator token.To
 	return resultTypes
 }
 
-func (p *Parser) genVarDecl(offset uint) {
-	fmt.Printf("    sub rsp, %d\n", offset)
+func (p *Parser) genVarDecl(offsetSize uint) {
+	fmt.Printf("    sub rsp, %d\n", offsetSize)
 }
 
 func (p *Parser) genVarAssign(symbol Symbol) {

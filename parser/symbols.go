@@ -39,3 +39,24 @@ func (st *SymbolTable) get(name string) (Symbol, bool) {
 func newSymbol(kind Type, offset uint) Symbol {
 	return Symbol{Kind: kind, Offset: offset}
 }
+
+type FuncSymbol struct {
+	ReturnType  Type
+	ParamsTypes []Type
+}
+
+type FuncTable map[string]FuncSymbol
+
+func (ft *FuncTable) put(name string, funcSymbol FuncSymbol) {
+	_, exists := (*ft)[name]
+	if exists {
+		fmt.Fprintf(os.Stderr, "ERROR: '%s' function already declared\n", name)
+		os.Exit(1)
+	}
+
+	(*ft)[name] = funcSymbol
+}
+
+func newFuncSymbol(returnType Type, paramsTypes []Type) FuncSymbol {
+	return FuncSymbol{ReturnType: returnType, ParamsTypes: paramsTypes}
+}

@@ -11,24 +11,32 @@ import (
 type Parser struct {
 	l         *lexer.Lexer
 	currToken token.Token
+	peekToken token.Token
 
-	symbolTable   SymbolTable
-	varsOffsets   uint
-	localLabelNum uint
+	symbolTable     SymbolTable
+	functionTable   FuncTable
+	currFuncRetType Type
+	varsOffsets     uint
+	localLabelNum   uint
 }
 
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
-		l: l,
+		l:             l,
+		functionTable: make(FuncTable),
 	}
 
+	p.functionTable.put("print", newFuncSymbol(TYPE_VOID, []Type{TYPE_INT}))
+
+	p.nextToken()
 	p.nextToken()
 
 	return p
 }
 
 func (p *Parser) nextToken() {
-	p.currToken = p.l.NextToken()
+	p.currToken = p.peekToken
+	p.peekToken = p.l.NextToken()
 }
 
 func (p *Parser) expect(tk token.TokenKind, msg string) token.Token {
@@ -75,17 +83,29 @@ func (p *Parser) Primary() Type {
 		return TYPE_BOOL
 
 	case token.TK_IDENT:
-		name := p.currToken.Text
+		if p.peekToken.Kind == token.TK_LPAREN {
+			funcName, returnType := p.FuncCall()
+			if returnType == TYPE_VOID {
+				fmt.Fprintf(os.Stderr, "ERROR: void function '%s' cannot be used in expression\n",
+					funcName.Text)
+				os.Exit(1)
+			}
 
-		symbol, exists := p.symbolTable.get(name)
-		if !exists {
-			fmt.Fprintf(os.Stderr, "ERROR: variable %s not defined\n", name)
-			os.Exit(1)
+			p.genFuncCallReturn()
+			return returnType
+		} else {
+			name := p.currToken.Text
+
+			symbol, exists := p.symbolTable.get(name)
+			if !exists {
+				fmt.Fprintf(os.Stderr, "ERROR: variable '%s' not defined\n", name)
+				os.Exit(1)
+			}
+			p.genSymbol(symbol)
+
+			p.nextToken()
+			return symbol.Kind
 		}
-		p.genSymbol(symbol)
-
-		p.nextToken()
-		return symbol.Kind
 
 	case token.TK_LPAREN:
 		p.nextToken()
@@ -94,7 +114,7 @@ func (p *Parser) Primary() Type {
 		return exprType
 
 	default:
-		fmt.Fprintf(os.Stderr, "ERROR: expected primary expression, got %s\n", p.currToken.Text)
+		fmt.Fprintf(os.Stderr, "ERROR: expected primary expression, got '%s'\n", p.currToken.Text)
 		os.Exit(1)
 		return TYPE_VOID
 	}
@@ -166,39 +186,112 @@ func (p *Parser) Type() Type {
 		return TYPE_BOOL
 
 	default:
-		fmt.Fprintf(os.Stderr, "ERROR: unknown type %s\n", typeToken.Text)
+		fmt.Fprintf(os.Stderr, "ERROR: unknown type '%s'\n", typeToken.Text)
 		os.Exit(1)
 		return TYPE_VOID
 	}
 }
 
-// TODO: function params generation
-func (p *Parser) FuncParam() {
-	p.Type()
-	p.expect(token.TK_IDENT, "identifier")
-}
+func (p *Parser) FuncCall() (token.Token, Type) {
+	name := p.expect(token.TK_IDENT, "function name")
 
-func (p *Parser) FuncParams() {
+	fn, exists := p.functionTable[name.Text]
+	if !exists {
+		fmt.Fprintf(os.Stderr, "ERROR: function '%s' is not defined\n", name.Text)
+		os.Exit(1)
+	}
+
 	p.expect(token.TK_LPAREN, "(")
 
+	var argsTypes []Type
 	if p.currToken.Kind != token.TK_RPAREN {
-		p.FuncParam()
+		argsTypes = append(argsTypes, p.Expression())
+
 		for p.currToken.Kind == token.TK_COMMA {
 			p.nextToken()
-			p.FuncParam()
+			argsTypes = append(argsTypes, p.Expression())
 		}
 	}
 
 	p.expect(token.TK_RPAREN, ")")
+
+	if len(argsTypes) != len(fn.ParamsTypes) {
+		fmt.Fprintf(os.Stderr, "ERROR: function '%s' expected %d arguments, got %d\n",
+			name.Text, len(fn.ParamsTypes), len(argsTypes))
+		os.Exit(1)
+	}
+
+	for i, expectedType := range fn.ParamsTypes {
+		if argsTypes[i] != expectedType {
+			fmt.Fprintf(os.Stderr, "ERROR: argument %d of '%s' type mismatch\n", i+1, name.Text)
+			os.Exit(1)
+		}
+	}
+
+	p.genFuncCall(name.Text, len(argsTypes))
+	return name, fn.ReturnType
+}
+
+func (p *Parser) FuncParam(paramIndex int) Type {
+	if paramIndex >= len(argRegs) {
+		fmt.Fprintf(os.Stderr, "ERROR: only %d parameters are supported", len(argRegs))
+		os.Exit(1)
+	}
+
+	paramType := p.Type()
+	paramName := p.expect(token.TK_IDENT, "identifier")
+
+	paramOffset := offsetOf[paramType]
+	p.varsOffsets += paramOffset
+	p.symbolTable.put(paramName.Text, newSymbol(paramType, p.varsOffsets))
+	p.genFuncParam(paramOffset, p.varsOffsets, argRegs[paramIndex])
+
+	return paramType
+}
+
+func (p *Parser) FuncParams() []Type {
+	p.expect(token.TK_LPAREN, "(")
+
+	var paramsTypes []Type
+	paramIndex := 0
+
+	if p.currToken.Kind != token.TK_RPAREN {
+		paramsTypes = append(paramsTypes, p.FuncParam(paramIndex))
+		paramIndex += 1
+
+		for p.currToken.Kind == token.TK_COMMA {
+			p.nextToken()
+			paramsTypes = append(paramsTypes, p.FuncParam(paramIndex))
+			paramIndex += 1
+		}
+	}
+
+	p.expect(token.TK_RPAREN, ")")
+	return paramsTypes
 }
 
 func (p *Parser) ReturnStatement() {
 	p.expect(token.TK_RETURN, "return")
 
 	if p.currToken.Kind != token.TK_SEMICOLON {
+		if p.currFuncRetType == TYPE_VOID {
+			fmt.Fprintln(os.Stderr, "ERROR: void function cannot return a value")
+			os.Exit(1)
+		}
+
 		returnType := p.Expression()
+		if returnType != p.currFuncRetType {
+			fmt.Fprintln(os.Stderr, "ERROR: return type mismatch")
+			os.Exit(1)
+		}
+
 		p.genReturnStatement(returnType)
 	} else {
+		if p.currFuncRetType != TYPE_VOID {
+			fmt.Fprintln(os.Stderr, "ERROR: function must return a value")
+			os.Exit(1)
+		}
+
 		p.genReturnStatement(TYPE_VOID)
 	}
 
@@ -293,7 +386,12 @@ func (p *Parser) Statement() {
 	case token.TK_BASIC:
 		p.VarDecl()
 	case token.TK_IDENT:
-		p.VarAssign()
+		if p.peekToken.Kind == token.TK_LPAREN {
+			p.FuncCall()
+			p.expect(token.TK_SEMICOLON, ";")
+		} else {
+			p.VarAssign()
+		}
 	case token.TK_IF:
 		p.IfStatement()
 	case token.TK_WHILE:
@@ -328,10 +426,14 @@ func (p *Parser) Func() {
 	p.genFuncLabel(funcName.Text)
 	p.genFuncStart()
 
-	p.FuncParams()
+	paramsTypes := p.FuncParams()
+
+	returnType := TYPE_VOID
 	if p.currToken.Kind != token.TK_LCURLY {
-		p.Type()
+		returnType = p.Type()
 	}
+	p.currFuncRetType = returnType
+	p.functionTable.put(funcName.Text, newFuncSymbol(returnType, paramsTypes))
 
 	p.Block()
 	p.genFuncEnd()
