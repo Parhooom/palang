@@ -13,6 +13,7 @@ const (
 
 	TK_IDENT
 	TK_INT
+	TK_STRING
 	TK_BASIC
 
 	TK_LPAREN
@@ -49,6 +50,7 @@ var keywords = map[string]TokenKind{
 	"return": TK_RETURN,
 	"int":    TK_BASIC,
 	"bool":   TK_BASIC,
+	"string": TK_BASIC,
 	"if":     TK_IF,
 	"while":  TK_WHILE,
 	"else":   TK_ELSE,

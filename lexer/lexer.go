@@ -93,6 +93,9 @@ func (l *Lexer) NextToken() token.Token {
 		} else {
 			tok = token.Token{Kind: token.TK_GT, Text: ">"}
 		}
+	case '"':
+		literal := l.readString()
+		tok = token.Token{Kind: token.TK_STRING, Text: literal}
 
 	case 0:
 		tok = token.Token{Kind: token.TK_EOF, Text: ""}
@@ -131,6 +134,21 @@ func (l *Lexer) readInteger() string {
 	for peek := l.peekChar(); isDigit(peek); peek = l.peekChar() {
 		l.nextChar()
 		buffer.WriteByte(l.char)
+	}
+
+	return buffer.String()
+}
+
+func (l *Lexer) readString() string {
+	var buffer bytes.Buffer
+
+	for peek := l.peekChar(); peek != '"' && peek != 0; peek = l.peekChar() {
+		l.nextChar()
+		buffer.WriteByte(l.char)
+	}
+
+	if l.peekChar() == '"' {
+		l.nextChar()
 	}
 
 	return buffer.String()

@@ -15,6 +15,7 @@ type Parser struct {
 
 	symbolTable     SymbolTable
 	functionTable   FuncTable
+	stringTable     StringTable
 	currFuncRetType Type
 	varsOffsets     uint
 	localLabelNum   uint
@@ -24,9 +25,8 @@ func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
 		l:             l,
 		functionTable: make(FuncTable),
+		stringTable:   StringTable{table: make(map[string]string)},
 	}
-
-	p.functionTable.put("print", newFuncSymbol(TYPE_VOID, []Type{TYPE_INT}))
 
 	p.nextToken()
 	p.nextToken()
@@ -81,6 +81,12 @@ func (p *Parser) Primary() Type {
 		p.genBoolLiteral(false)
 		p.nextToken()
 		return TYPE_BOOL
+
+	case token.TK_STRING:
+		label := p.stringTable.getOrInsert(p.currToken.Text)
+		p.genStringLiteral(label)
+		p.nextToken()
+		return TYPE_STRING
 
 	case token.TK_IDENT:
 		if p.peekToken.Kind == token.TK_LPAREN {
@@ -184,6 +190,8 @@ func (p *Parser) Type() Type {
 		return TYPE_INT
 	case "bool":
 		return TYPE_BOOL
+	case "string":
+		return TYPE_STRING
 
 	default:
 		fmt.Fprintf(os.Stderr, "ERROR: unknown type '%s'\n", typeToken.Text)
@@ -192,14 +200,24 @@ func (p *Parser) Type() Type {
 	}
 }
 
-func (p *Parser) FuncCall() (token.Token, Type) {
-	name := p.expect(token.TK_IDENT, "function name")
-
-	fn, exists := p.functionTable[name.Text]
-	if !exists {
-		fmt.Fprintf(os.Stderr, "ERROR: function '%s' is not defined\n", name.Text)
+func (p *Parser) printFunc(argsTypes []Type) {
+	if len(argsTypes) != 1 {
+		fmt.Fprintf(os.Stderr, "ERROR: function 'print' expected 1 argument, got %d\n",
+			len(argsTypes))
 		os.Exit(1)
 	}
+
+	argType := argsTypes[0]
+	if argType != TYPE_INT && argType != TYPE_BOOL && argType != TYPE_STRING {
+		fmt.Fprintf(os.Stderr, "ERROR: function 'print' cannot print this type of expression\n")
+		os.Exit(1)
+	}
+
+	p.genPrintCall(argType)
+}
+
+func (p *Parser) FuncCall() (token.Token, Type) {
+	name := p.expect(token.TK_IDENT, "function name")
 
 	p.expect(token.TK_LPAREN, "(")
 
@@ -214,6 +232,17 @@ func (p *Parser) FuncCall() (token.Token, Type) {
 	}
 
 	p.expect(token.TK_RPAREN, ")")
+
+	if name.Text == "print" {
+		p.printFunc(argsTypes)
+		return name, TYPE_VOID
+	}
+
+	fn, exists := p.functionTable[name.Text]
+	if !exists {
+		fmt.Fprintf(os.Stderr, "ERROR: function '%s' is not defined\n", name.Text)
+		os.Exit(1)
+	}
 
 	if len(argsTypes) != len(fn.ParamsTypes) {
 		fmt.Fprintf(os.Stderr, "ERROR: function '%s' expected %d arguments, got %d\n",
@@ -241,7 +270,7 @@ func (p *Parser) FuncParam(paramIndex int) Type {
 	paramType := p.Type()
 	paramName := p.expect(token.TK_IDENT, "identifier")
 
-	paramOffset := offsetOf[paramType]
+	paramOffset := paramType.Size()
 	p.varsOffsets += paramOffset
 	p.symbolTable.put(paramName.Text, newSymbol(paramType, p.varsOffsets))
 	p.genFuncParam(paramOffset, p.varsOffsets, argRegs[paramIndex])
@@ -303,7 +332,7 @@ func (p *Parser) VarDecl() {
 	varToken := p.expect(token.TK_IDENT, "identifier")
 	p.expect(token.TK_SEMICOLON, ";")
 
-	varTypeOffset := offsetOf[varType]
+	varTypeOffset := varType.Size()
 	p.varsOffsets += varTypeOffset
 	p.symbolTable.put(varToken.Text, newSymbol(varType, p.varsOffsets))
 	p.genVarDecl(varTypeOffset)

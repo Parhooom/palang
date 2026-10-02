@@ -1,0 +1,22 @@
+func greet(string message, string name) {
+    print(message);
+    print(name);
+}
+
+func getGreeting() string {
+    return "welcome to Palang!";
+}
+
+func main() int {
+    string msg;
+    msg = getGreeting();
+
+    print(msg);
+    greet("hello,", "world!");
+
+    if (msg == "welcome to Palang!") {
+        print("matched!");
+    }
+
+    return 0;
+}

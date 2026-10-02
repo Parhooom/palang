@@ -19,9 +19,6 @@ var argRegs = []string{
 func (p *Parser) genProgramStart() {
 	fmt.Println("format ELF64")
 	fmt.Println()
-	fmt.Println("section \".rodata\"")
-	fmt.Println("    fmt_int db \"%d\", 10, 0")
-	fmt.Println()
 	fmt.Println("section \".text\" executable")
 	fmt.Println()
 	fmt.Println("extrn \"printf\" as _printf")
@@ -29,8 +26,17 @@ func (p *Parser) genProgramStart() {
 }
 
 func (p *Parser) genProgramEnd() {
-	fmt.Printf("\n")
-	fmt.Printf("section \".note.GNU-stack\"\n")
+	fmt.Println()
+	fmt.Println("section \".rodata\"")
+	fmt.Println("    fmt_int db \"%d\", 10, 0")
+	fmt.Println("    fmt_str db \"%s\", 10, 0")
+
+	for _, str := range p.stringTable.strings {
+		fmt.Printf("    %s db \"%s\", 0\n", str.Label, str.Value)
+	}
+
+	fmt.Println()
+	fmt.Println("section \".note.GNU-stack\"")
 }
 
 func (p *Parser) genFuncLabel(name string) {
@@ -64,14 +70,21 @@ func (p *Parser) genFuncParam(offsetSize uint, offset uint, reg string) {
 	fmt.Printf("    mov [rbp-%d], %s\n", offset, reg)
 }
 
-func (p *Parser) genPrintCall() {
+func (p *Parser) genPrintCall(argType Type) {
 	aligned := (p.varsOffsets % 16) == 0
 
 	fmt.Println("    pop rsi")
 	if !aligned {
 		fmt.Println("    sub rsp, 8")
 	}
-	fmt.Println("    lea rdi, [fmt_int]")
+
+	switch argType {
+	case TYPE_INT, TYPE_BOOL:
+		fmt.Println("    lea rdi, [fmt_int]")
+	case TYPE_STRING:
+		fmt.Println("    lea rdi, [fmt_str]")
+	}
+
 	fmt.Println("    mov rax, 0")
 	fmt.Println("    call printf")
 	if !aligned {
@@ -80,11 +93,6 @@ func (p *Parser) genPrintCall() {
 }
 
 func (p *Parser) genFuncCall(name string, argsCount int) {
-	if name == "print" {
-		p.genPrintCall()
-		return
-	}
-
 	for i := argsCount - 1; i >= 0; i-- {
 		fmt.Printf("    pop %s\n", argRegs[i])
 	}
@@ -98,7 +106,7 @@ func (p *Parser) genFuncCallReturn() {
 func (p *Parser) genReturnStatement(retType Type) {
 	fmt.Println()
 
-	if retType == TYPE_INT || retType == TYPE_BOOL {
+	if retType == TYPE_INT || retType == TYPE_BOOL || retType == TYPE_STRING {
 		fmt.Println("    pop rax")
 	}
 
@@ -115,6 +123,11 @@ func (p *Parser) genBoolLiteral(val bool) {
 	} else {
 		fmt.Println("    push 0")
 	}
+}
+
+func (p *Parser) genStringLiteral(label string) {
+	fmt.Printf("    lea rax, [%s]\n", label)
+	fmt.Printf("    push rax\n")
 }
 
 func (p *Parser) genSymbol(symbol Symbol) {
@@ -145,7 +158,7 @@ func (p *Parser) checkBinaryExpressionTypes(leftType, rightType Type, operator t
 		return TYPE_BOOL
 
 	case token.TK_EQ, token.TK_NEQ:
-		if !(leftType == TYPE_INT || leftType == TYPE_BOOL) {
+		if !(leftType == TYPE_INT || leftType == TYPE_BOOL || leftType == TYPE_STRING) {
 			fmt.Fprintln(os.Stderr, "ERROR: unsupported equality operands")
 			os.Exit(1)
 		}
