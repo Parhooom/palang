@@ -10,11 +10,17 @@ import (
 type Lexer struct {
 	input *bufio.Reader
 	char  byte
+
+	row      uint
+	col      uint
+	fileName string
 }
 
-func New(input *bufio.Reader) *Lexer {
+func New(input *bufio.Reader, fileName string) *Lexer {
 	return &Lexer{
-		input: input,
+		input:    input,
+		fileName: fileName,
+		row:      1,
 	}
 }
 
@@ -25,6 +31,16 @@ func (l *Lexer) nextChar() {
 	}
 
 	l.char = char
+
+	switch l.char {
+	case '\n':
+		l.row += 1
+		l.col = 0
+	case '\t':
+		l.col += 4
+	default:
+		l.col += 1
+	}
 }
 
 func (l *Lexer) peekChar() byte {
@@ -42,6 +58,12 @@ func (l *Lexer) NextToken() token.Token {
 
 	for l.char == ' ' || l.char == '\n' || l.char == '\t' {
 		l.nextChar()
+	}
+
+	location := token.Location{
+		Row:      l.row,
+		Col:      l.col,
+		FileName: l.fileName,
 	}
 
 	switch l.char {
@@ -112,6 +134,7 @@ func (l *Lexer) NextToken() token.Token {
 		}
 	}
 
+	tok.Location = location
 	return tok
 }
 

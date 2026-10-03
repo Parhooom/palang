@@ -27,10 +27,10 @@ func main() {
 	}
 	defer f.Close()
 
-	l := lexer.New(bufio.NewReader(f))
+	l := lexer.New(bufio.NewReader(f), args[1])
 
 	// for tok := l.NextToken(); tok.Kind != token.TK_EOF; tok = l.NextToken() {
-	// 	fmt.Println(tok.Text)
+	// 	fmt.Printf("%s %s\n", tok.Loc(), tok.Text)
 	// }
 
 	p := parser.New(l)

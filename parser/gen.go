@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"os"
 
 	"palang/token"
 )
@@ -136,38 +135,33 @@ func (p *Parser) genSymbol(symbol Symbol) {
 
 func (p *Parser) checkBinaryExpressionTypes(leftType, rightType Type, operator token.Token) Type {
 	if leftType != rightType {
-		fmt.Fprintln(os.Stderr, "ERROR: binary expression operands must have same types")
-		os.Exit(1)
+		report(operator, "binary expression operands must have same types")
 	}
 
 	switch operator.Kind {
 	case token.TK_PLUS, token.TK_MINUS, token.TK_MULT, token.TK_DIV:
 		if leftType != TYPE_INT {
-			fmt.Fprintln(os.Stderr, "ERROR: arithmetic operands must be integers")
-			os.Exit(1)
+			report(operator, "arithmetic operands must be integers")
 		}
 
 		return TYPE_INT
 
 	case token.TK_LT, token.TK_LTE, token.TK_GT, token.TK_GTE:
 		if leftType != TYPE_INT {
-			fmt.Fprintln(os.Stderr, "ERROR: comparison operands must be integers")
-			os.Exit(1)
+			report(operator, "comparison operands must be integers")
 		}
 
 		return TYPE_BOOL
 
 	case token.TK_EQ, token.TK_NEQ:
 		if !(leftType == TYPE_INT || leftType == TYPE_BOOL || leftType == TYPE_STRING) {
-			fmt.Fprintln(os.Stderr, "ERROR: unsupported equality operands")
-			os.Exit(1)
+			report(operator, "unsupported equality operands")
 		}
 
 		return TYPE_BOOL
 
 	default:
-		fmt.Fprintln(os.Stderr, "ERROR: unsupported binary operator")
-		os.Exit(1)
+		report(operator, "unsupported binary operator")
 		return TYPE_VOID
 	}
 }

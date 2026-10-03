@@ -1,10 +1,23 @@
 package token
 
+import "fmt"
+
 type TokenKind uint8
 
+type Location struct {
+	Row      uint
+	Col      uint
+	FileName string
+}
+
 type Token struct {
-	Kind TokenKind
-	Text string
+	Kind     TokenKind
+	Text     string
+	Location Location
+}
+
+func (t Token) Loc() string {
+	return fmt.Sprintf("%s:%d:%d", t.Location.FileName, t.Location.Row, t.Location.Col)
 }
 
 const (

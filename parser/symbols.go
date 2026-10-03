@@ -2,7 +2,8 @@ package parser
 
 import (
 	"fmt"
-	"os"
+
+	"palang/token"
 )
 
 type Type uint8
@@ -34,14 +35,13 @@ type SymbolTable struct {
 	Table map[string]Symbol
 }
 
-func (st *SymbolTable) put(name string, symbol Symbol) {
-	_, exists := st.Table[name]
+func (st *SymbolTable) put(name token.Token, symbol Symbol) {
+	_, exists := st.Table[name.Text]
 	if exists {
-		fmt.Fprintf(os.Stderr, "ERROR: '%s' exists in this scope\n", name)
-		os.Exit(1)
+		report(name, fmt.Sprintf("'%s' exists in this scope", name.Text))
 	}
 
-	st.Table[name] = symbol
+	st.Table[name.Text] = symbol
 }
 
 func (st *SymbolTable) get(name string) (Symbol, bool) {
@@ -66,14 +66,13 @@ type FuncSymbol struct {
 
 type FuncTable map[string]FuncSymbol
 
-func (ft *FuncTable) put(name string, funcSymbol FuncSymbol) {
-	_, exists := (*ft)[name]
+func (ft *FuncTable) put(name token.Token, funcSymbol FuncSymbol) {
+	_, exists := (*ft)[name.Text]
 	if exists {
-		fmt.Fprintf(os.Stderr, "ERROR: '%s' is already declared\n", name)
-		os.Exit(1)
+		report(name, fmt.Sprintf("'%s' is already declared", name.Text))
 	}
 
-	(*ft)[name] = funcSymbol
+	(*ft)[name.Text] = funcSymbol
 }
 
 func newFuncSymbol(returnType Type, paramsTypes []Type) FuncSymbol {

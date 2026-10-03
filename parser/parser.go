@@ -39,10 +39,14 @@ func (p *Parser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
+func report(tok token.Token, msg string) {
+	fmt.Fprintf(os.Stderr, "%s: error: %s\n", tok.Loc(), msg)
+	os.Exit(1)
+}
+
 func (p *Parser) expect(tk token.TokenKind, msg string) token.Token {
 	if p.currToken.Kind != tk {
-		fmt.Fprintf(os.Stderr, "ERROR: Expected '%s', got '%s'\n", msg, p.currToken.Text)
-		os.Exit(1)
+		report(p.currToken, fmt.Sprintf("expected '%s', got '%s'", msg, p.currToken.Text))
 	}
 
 	currToken := p.currToken
@@ -92,9 +96,10 @@ func (p *Parser) Primary() Type {
 		if p.peekToken.Kind == token.TK_LPAREN {
 			funcName, returnType := p.FuncCall()
 			if returnType == TYPE_VOID {
-				fmt.Fprintf(os.Stderr, "ERROR: void function '%s' cannot be used in expression\n",
-					funcName.Text)
-				os.Exit(1)
+				report(
+					funcName,
+					fmt.Sprintf("void function '%s' cannot be used in expression", funcName.Text),
+				)
 			}
 
 			p.genFuncCallReturn()
@@ -104,8 +109,7 @@ func (p *Parser) Primary() Type {
 
 			symbol, exists := p.symbolTable.get(name)
 			if !exists {
-				fmt.Fprintf(os.Stderr, "ERROR: variable '%s' not defined\n", name)
-				os.Exit(1)
+				report(p.currToken, fmt.Sprintf("variable '%s' not defined", name))
 			}
 			p.genSymbol(symbol)
 
@@ -120,8 +124,7 @@ func (p *Parser) Primary() Type {
 		return exprType
 
 	default:
-		fmt.Fprintf(os.Stderr, "ERROR: expected primary expression, got '%s'\n", p.currToken.Text)
-		os.Exit(1)
+		report(p.currToken, fmt.Sprintf("expected primary expression, got '%s'", p.currToken.Text))
 		return TYPE_VOID
 	}
 }
@@ -194,23 +197,19 @@ func (p *Parser) Type() Type {
 		return TYPE_STRING
 
 	default:
-		fmt.Fprintf(os.Stderr, "ERROR: unknown type '%s'\n", typeToken.Text)
-		os.Exit(1)
+		report(typeToken, fmt.Sprintf("unknown type '%s'", typeToken.Text))
 		return TYPE_VOID
 	}
 }
 
-func (p *Parser) printFunc(argsTypes []Type) {
+func (p *Parser) printFunc(argsTypes []Type, name token.Token) {
 	if len(argsTypes) != 1 {
-		fmt.Fprintf(os.Stderr, "ERROR: function 'print' expected 1 argument, got %d\n",
-			len(argsTypes))
-		os.Exit(1)
+		report(name, fmt.Sprintf("function 'print' expected 1 argument, got %d", len(argsTypes)))
 	}
 
 	argType := argsTypes[0]
 	if argType != TYPE_INT && argType != TYPE_BOOL && argType != TYPE_STRING {
-		fmt.Fprintf(os.Stderr, "ERROR: function 'print' cannot print this type of expression\n")
-		os.Exit(1)
+		report(name, "function 'print' cannot print this type of expression")
 	}
 
 	p.genPrintCall(argType)
@@ -234,26 +233,26 @@ func (p *Parser) FuncCall() (token.Token, Type) {
 	p.expect(token.TK_RPAREN, ")")
 
 	if name.Text == "print" {
-		p.printFunc(argsTypes)
+		p.printFunc(argsTypes, name)
 		return name, TYPE_VOID
 	}
 
 	fn, exists := p.functionTable[name.Text]
 	if !exists {
-		fmt.Fprintf(os.Stderr, "ERROR: function '%s' is not defined\n", name.Text)
-		os.Exit(1)
+		report(name, fmt.Sprintf("function '%s' is not defined", name.Text))
 	}
 
 	if len(argsTypes) != len(fn.ParamsTypes) {
-		fmt.Fprintf(os.Stderr, "ERROR: function '%s' expected %d arguments, got %d\n",
-			name.Text, len(fn.ParamsTypes), len(argsTypes))
-		os.Exit(1)
+		report(
+			name,
+			fmt.Sprintf("function '%s' expected %d arguments, got %d",
+				name.Text, len(fn.ParamsTypes), len(argsTypes)),
+		)
 	}
 
 	for i, expectedType := range fn.ParamsTypes {
 		if argsTypes[i] != expectedType {
-			fmt.Fprintf(os.Stderr, "ERROR: argument %d of '%s' type mismatch\n", i+1, name.Text)
-			os.Exit(1)
+			report(name, fmt.Sprintf("argument %d of '%s' type mismatch", i+1, name.Text))
 		}
 	}
 
@@ -261,10 +260,9 @@ func (p *Parser) FuncCall() (token.Token, Type) {
 	return name, fn.ReturnType
 }
 
-func (p *Parser) FuncParam(paramIndex int) Type {
+func (p *Parser) FuncParam(paramIndex int, funcName token.Token) Type {
 	if paramIndex >= len(argRegs) {
-		fmt.Fprintf(os.Stderr, "ERROR: only %d parameters are supported", len(argRegs))
-		os.Exit(1)
+		report(funcName, fmt.Sprintf("only %d parameters are supported", len(argRegs)))
 	}
 
 	paramType := p.Type()
@@ -272,25 +270,25 @@ func (p *Parser) FuncParam(paramIndex int) Type {
 
 	paramOffset := paramType.Size()
 	p.varsOffsets += paramOffset
-	p.symbolTable.put(paramName.Text, newSymbol(paramType, p.varsOffsets))
+	p.symbolTable.put(paramName, newSymbol(paramType, p.varsOffsets))
 	p.genFuncParam(paramOffset, p.varsOffsets, argRegs[paramIndex])
 
 	return paramType
 }
 
-func (p *Parser) FuncParams() []Type {
+func (p *Parser) FuncParams(funcName token.Token) []Type {
 	p.expect(token.TK_LPAREN, "(")
 
 	var paramsTypes []Type
 	paramIndex := 0
 
 	if p.currToken.Kind != token.TK_RPAREN {
-		paramsTypes = append(paramsTypes, p.FuncParam(paramIndex))
+		paramsTypes = append(paramsTypes, p.FuncParam(paramIndex, funcName))
 		paramIndex += 1
 
 		for p.currToken.Kind == token.TK_COMMA {
 			p.nextToken()
-			paramsTypes = append(paramsTypes, p.FuncParam(paramIndex))
+			paramsTypes = append(paramsTypes, p.FuncParam(paramIndex, funcName))
 			paramIndex += 1
 		}
 	}
@@ -300,25 +298,22 @@ func (p *Parser) FuncParams() []Type {
 }
 
 func (p *Parser) ReturnStatement() {
-	p.expect(token.TK_RETURN, "return")
+	returnToken := p.expect(token.TK_RETURN, "return")
 
 	if p.currToken.Kind != token.TK_SEMICOLON {
 		if p.currFuncRetType == TYPE_VOID {
-			fmt.Fprintln(os.Stderr, "ERROR: void function cannot return a value")
-			os.Exit(1)
+			report(returnToken, "void function cannot return a value")
 		}
 
 		returnType := p.Expression()
 		if returnType != p.currFuncRetType {
-			fmt.Fprintln(os.Stderr, "ERROR: return type mismatch")
-			os.Exit(1)
+			report(returnToken, "return type mismatch")
 		}
 
 		p.genReturnStatement(returnType)
 	} else {
 		if p.currFuncRetType != TYPE_VOID {
-			fmt.Fprintln(os.Stderr, "ERROR: function must return a value")
-			os.Exit(1)
+			report(returnToken, "function must return a value")
 		}
 
 		p.genReturnStatement(TYPE_VOID)
@@ -334,7 +329,7 @@ func (p *Parser) VarDecl() {
 
 	varTypeOffset := varType.Size()
 	p.varsOffsets += varTypeOffset
-	p.symbolTable.put(varToken.Text, newSymbol(varType, p.varsOffsets))
+	p.symbolTable.put(varToken, newSymbol(varType, p.varsOffsets))
 	p.genVarDecl(varTypeOffset)
 }
 
@@ -346,12 +341,10 @@ func (p *Parser) VarAssign() {
 
 	symbol, exists := p.symbolTable.get(varToken.Text)
 	if !exists {
-		fmt.Fprintln(os.Stderr, "ERROR: variable not defined")
-		os.Exit(1)
+		report(varToken, fmt.Sprintf("variable '%s' not defined", varToken.Text))
 	}
 	if symbol.Kind != exprType {
-		fmt.Fprintln(os.Stderr, "ERROR: type mismatch")
-		os.Exit(1)
+		report(varToken, "type mismatch")
 	}
 
 	p.genVarAssign(symbol)
@@ -427,8 +420,7 @@ func (p *Parser) Statement() {
 		p.WhileStatement()
 
 	default:
-		fmt.Fprintln(os.Stderr, "ERROR: statement not implemented")
-		os.Exit(1)
+		report(p.currToken, "statement not supported")
 	}
 }
 
@@ -455,14 +447,14 @@ func (p *Parser) Func() {
 	p.genFuncLabel(funcName.Text)
 	p.genFuncStart()
 
-	paramsTypes := p.FuncParams()
+	paramsTypes := p.FuncParams(funcName)
 
 	returnType := TYPE_VOID
 	if p.currToken.Kind != token.TK_LCURLY {
 		returnType = p.Type()
 	}
 	p.currFuncRetType = returnType
-	p.functionTable.put(funcName.Text, newFuncSymbol(returnType, paramsTypes))
+	p.functionTable.put(funcName, newFuncSymbol(returnType, paramsTypes))
 
 	p.Block()
 	p.genFuncEnd()
